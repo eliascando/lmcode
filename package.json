@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "description": "Autonomous local coding agent CLI for LM Studio",
   "bin": {
-    "lmcode": "./bin/lmcode.js"
+    "lmcode": "bin/lmcode.js"
   },
   "type": "commonjs",
-  "main": "./src/cli.js",
+  "main": "src/cli.js",
   "files": [
     "bin/",
     "src/",
