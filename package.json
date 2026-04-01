@@ -11,8 +11,9 @@
   },
   "scripts": {
     "start": "node ./bin/lmcode.js",
-    "check": "node --check ./bin/lmcode.js",
+    "check": "node --check ./bin/lmcode.js && node --check ./src/cli.js && node --check ./src/core.js && node --check ./src/ui.js && node --check ./src/lmstudio.js && node --check ./src/apply.js && node --check ./src/agent.js",
     "models": "node ./bin/lmcode.js --models",
+    "test": "node --test",
     "install:local": "./scripts/install-local.sh"
   }
 }
