@@ -1,19 +1,40 @@
 {
   "name": "lmcode",
   "version": "0.1.0",
-  "private": true,
-  "description": "CLI local para programar con LM Studio",
+  "description": "Autonomous local coding agent CLI for LM Studio",
   "bin": {
     "lmcode": "./bin/lmcode.js"
+  },
+  "type": "commonjs",
+  "main": "./src/cli.js",
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "cli",
+    "agent",
+    "coding-agent",
+    "lmstudio",
+    "local-llm"
+  ],
+  "license": "MIT",
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "start": "node ./bin/lmcode.js",
-    "check": "node --check ./bin/lmcode.js && node --check ./src/cli.js && node --check ./src/core.js && node --check ./src/ui.js && node --check ./src/lmstudio.js && node --check ./src/apply.js && node --check ./src/agent.js",
+    "check": "node --check ./bin/lmcode.js && node --check ./src/cli.js && node --check ./src/config.js && node --check ./src/core.js && node --check ./src/ui.js && node --check ./src/lmstudio.js && node --check ./src/apply.js && node --check ./src/agent.js",
     "models": "node ./bin/lmcode.js --models",
     "test": "node --test",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run check && npm test",
     "install:local": "./scripts/install-local.sh"
   }
 }

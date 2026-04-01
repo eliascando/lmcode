@@ -1,45 +1,196 @@
 # lmcode
 
-CLI local para programar contra LM Studio.
+CLI de agente de programacion local para LM Studio.
 
-Ahora el flujo normal funciona como un agente iterativo: puede leer archivos, listar, buscar texto, ejecutar comandos seguros, escribir cambios y cerrar con una respuesta final, en vez de responder una sola vez.
+`lmcode` trabaja sobre el proyecto actual y puede leer archivos, buscar texto, ejecutar comandos seguros, modificar codigo y pedir confirmacion solo para acciones peligrosas como borrado o comandos destructivos.
 
-Este proyecto se extrajo desde la instalacion activa en `~/.local/bin/lmcode` para que el codigo viva en un repo real y se pueda seguir desarrollando desde aqui.
+## Requisitos
 
-## Estructura
+- Node.js 18 o superior
+- LM Studio instalado
+- El servidor local de LM Studio levantado
+- Al menos un modelo cargado en LM Studio
 
-- `bin/lmcode.js`: wrapper ejecutable del comando
-- `src/cli.js`: orquestacion principal del CLI
-- `src/agent.js`: loop del agente y protocolo de herramientas
-- `src/core.js`: estado de sesion, workspace, contexto y deteccion de archivos
-- `src/lmstudio.js`: cliente y seleccion de modelos de LM Studio
-- `src/apply.js`: generacion, parseo y aplicacion de cambios
-- `src/ui.js`: salida de terminal, spinner e input
-- `test/`: pruebas sobre seleccion implicita, refresh del workspace y apply
-- `scripts/install-local.sh`: copia el CLI de este repo a `~/.local/bin/lmcode`
+Por defecto `lmcode` usa `http://127.0.0.1:1234`.
 
-## Uso
+## Instalacion
+
+### Desde npm
 
 ```bash
-npm run check
-npm test
-npm start
-npm run models
+npm install -g lmcode
 ```
 
-## Comportamiento
+### Desde este repo
 
-- Un prompt normal entra al loop de agente.
-- El modelo puede pedir `READ`, `LIST`, `GREP`, `RUN`, `FILE`, `DELETE` o `FINAL`.
-- Los comandos peligrosos y el borrado piden confirmacion.
-- Los cambios de archivos se aplican automaticamente con diff visible.
+```bash
+npm install
+npm run check
+npm test
+npm link
+```
 
-## Reinstalar el comando global local
+Si no quieres usar `npm link`, puedes instalar el binario localmente con:
 
 ```bash
 npm run install:local
 ```
 
-## Nota
+## Ejecucion
 
-Por ahora el binario instalado original se dejo intacto. Este repo ya contiene una copia funcional para seguir trabajando sin editar directamente `~/.local/bin/lmcode`.
+### Ver modelos detectados
+
+```bash
+lmcode --models
+```
+
+### Modo interactivo
+
+```bash
+lmcode
+```
+
+### Prompt unico
+
+```bash
+lmcode "analiza este proyecto y dime los riesgos principales"
+```
+
+### Forzar modelo
+
+```bash
+lmcode --model qwen/qwen3.5-9b
+lmcode --model qwen/qwen3.5-9b "explica este modulo"
+```
+
+### Cambiar URL o system prompt por comando
+
+```bash
+lmcode --base-url http://127.0.0.1:1234 --model qwen/qwen3.5-9b
+lmcode --system "Eres un agente local experto en Node.js" "revisa este repo"
+```
+
+### Agregar archivos iniciales al contexto
+
+```bash
+lmcode --add src/app.js --add package.json "explica la arquitectura"
+```
+
+## Configuracion
+
+Puedes configurar `lmcode` con variables de entorno.
+
+### URL del servidor LM Studio
+
+```bash
+export LMSTUDIO_BASE_URL="http://127.0.0.1:1234"
+```
+
+### Modelo por defecto
+
+```bash
+export LMSTUDIO_MODEL="qwen/qwen3.5-9b"
+```
+
+Tambien se acepta `OPENAI_MODEL`.
+
+### API key opcional
+
+Si tu servidor local requiere token:
+
+```bash
+export LMSTUDIO_API_KEY="tu-token"
+```
+
+Tambien se aceptan `OPENAI_API_KEY` y `API_KEY`.
+
+### System prompt
+
+```bash
+export SYSTEM_PROMPT="Eres un agente local experto en TypeScript y React."
+```
+
+### Ventana de contexto
+
+```bash
+export LMCODE_CONTEXT_TOKENS=8192
+```
+
+Tambien se aceptan `LMSTUDIO_CONTEXT_TOKENS` y `CONTEXT_WINDOW`.
+
+### Desactivar color
+
+```bash
+export NO_COLOR=1
+```
+
+## Comandos interactivos
+
+- `/help`: muestra ayuda corta
+- `/models`: lista modelos
+- `/model`: selector interactivo de modelo
+- `/model <id>`: cambia o carga un modelo por id
+- `/load`: alias de `/model`
+- `/load <id>`: carga un modelo por id
+- `/files [filtro]`: lista archivos del proyecto
+- `/add <ruta>`: agrega archivos al contexto manual
+- `/drop <ruta>`: quita archivos del contexto
+- `/context`: muestra el contexto actual
+- `/read <ruta>`: muestra un archivo
+- `/run <comando>`: ejecuta un comando y guarda la salida en contexto
+- `/patch <inst>`: pide un diff unificado
+- `/apply <inst>`: propone cambios y los aplica
+- `/summary`: muestra el resumen acumulado
+- `/compact`: fuerza compactacion del historial
+- `/clear`: limpia la conversacion
+- `/reset`: reinicia conversacion, archivos y salida de comandos
+- `/exit`: sale
+
+## Como trabaja el agente
+
+En el flujo normal, `lmcode` entra a un loop de agente. El modelo puede:
+
+- leer archivos
+- listar archivos
+- buscar texto
+- ejecutar comandos seguros
+- escribir archivos
+- pedir borrado con confirmacion
+- cerrar con una respuesta final
+
+Los cambios de codigo se aplican mostrando diff. Los comandos peligrosos y el borrado requieren aprobacion.
+
+## Desarrollo
+
+```bash
+npm install
+npm run check
+npm test
+```
+
+## Preparacion para npm
+
+Antes de publicar:
+
+```bash
+npm run check
+npm test
+npm run pack:check
+```
+
+Luego inicia sesion y publica:
+
+```bash
+npm login
+npm publish
+```
+
+Si quieres revisar exactamente lo que saldra al registro:
+
+```bash
+npm pack --dry-run
+```
+
+## Nota sobre el nombre del paquete
+
+Este repo esta preparado para npm, pero la disponibilidad final del nombre `lmcode` depende del registro de npm en el momento de publicar. Si el nombre ya esta tomado, cambia `name` en `package.json` antes de hacer `npm publish`.
