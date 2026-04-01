@@ -1,5 +1,5 @@
 {
-  "name": "lmcode",
+  "name": "@ecando/lmcode",
   "version": "0.1.0",
   "description": "Autonomous local coding agent CLI for LM Studio",
   "bin": {

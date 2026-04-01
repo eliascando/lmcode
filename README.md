@@ -18,7 +18,7 @@ Por defecto `lmcode` usa `http://127.0.0.1:1234`.
 ### Desde npm
 
 ```bash
-npm install -g lmcode
+npm install -g @ecando/lmcode
 ```
 
 ### Desde este repo
@@ -191,6 +191,10 @@ Si quieres revisar exactamente lo que saldra al registro:
 npm pack --dry-run
 ```
 
-## Nota sobre el nombre del paquete
+## Nombre publicado
 
-Este repo esta preparado para npm, pero la disponibilidad final del nombre `lmcode` depende del registro de npm en el momento de publicar. Si el nombre ya esta tomado, cambia `name` en `package.json` antes de hacer `npm publish`.
+El paquete se publica como `@ecando/lmcode`, pero el comando instalado sigue siendo:
+
+```bash
+lmcode
+```
