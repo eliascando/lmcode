@@ -1,6 +1,6 @@
 {
   "name": "@ecando/lmcode",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Autonomous local coding agent CLI for LM Studio",
   "repository": {
     "type": "git",
