@@ -83,3 +83,94 @@ test("applyChanges refreshes project snapshot and keeps new files in selection",
   assert.equal(state.selectedFiles.has("src/new-file.js"), true);
   assert.match(state.gitStatus, /new-file\.js/);
 });
+
+test("applyChanges accepts malformed READ and FILE tags with short closing markers", async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "lmcode-apply-"));
+  await fs.mkdir(path.join(rootDir, "src"), { recursive: true });
+  await fs.writeFile(path.join(rootDir, "src/app.js"), "console.log('old');\n", "utf8");
+  await fs.writeFile(path.join(rootDir, "src/extra.js"), "export const extra = true;\n", "utf8");
+  execFileSync("git", ["init"], { cwd: rootDir, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "lmcode@example.test"], {
+    cwd: rootDir,
+    stdio: "ignore",
+  });
+  execFileSync("git", ["config", "user.name", "lmcode"], {
+    cwd: rootDir,
+    stdio: "ignore",
+  });
+  execFileSync("git", ["add", "."], { cwd: rootDir, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "test"], { cwd: rootDir, stdio: "ignore" });
+
+  const state = createState(createOptions(), rootDir);
+  replaceSelectedFiles(state, ["src/app.js"], "manual");
+
+  let callCount = 0;
+  const askModel = async () => {
+    callCount += 1;
+    if (callCount === 1) {
+      return "<<<READ:src/extra.js>>";
+    }
+
+    return [
+      "<<<FILE:src/app.js>>",
+      "console.log('new');",
+      "<<<END FILE>>",
+      "<<<FILE:src/extra.js>",
+      "export const extra = false;",
+      "<<<END FILE>",
+    ].join("\n");
+  };
+
+  const applied = await applyChanges(
+    state,
+    "model",
+    "actualiza archivos",
+    { askModel, ui: createFakeUi() },
+    { autoConfirm: true }
+  );
+
+  assert.equal(applied, true);
+  assert.equal(callCount, 2);
+  assert.equal(
+    await fs.readFile(path.join(rootDir, "src/app.js"), "utf8"),
+    "console.log('new');"
+  );
+  assert.equal(
+    await fs.readFile(path.join(rootDir, "src/extra.js"), "utf8"),
+    "export const extra = false;"
+  );
+});
+
+test("applyChanges denies file modifications in read-only mode", async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "lmcode-apply-"));
+  await fs.mkdir(path.join(rootDir, "src"), { recursive: true });
+  await fs.writeFile(path.join(rootDir, "src/app.js"), "console.log('old');\n", "utf8");
+
+  const state = createState({ ...createOptions(), permissionMode: "read-only" }, rootDir);
+  replaceSelectedFiles(state, ["src/app.js"], "manual");
+
+  let called = false;
+  const askModel = async () => {
+    called = true;
+    return [
+      "<<<FILE:src/app.js>>>",
+      "console.log('new');",
+      "<<<END FILE>>>",
+    ].join("\n");
+  };
+
+  const applied = await applyChanges(
+    state,
+    "model",
+    "actualiza archivo",
+    { askModel, ui: createFakeUi() },
+    { autoConfirm: true }
+  );
+
+  assert.equal(applied, false);
+  assert.equal(called, false);
+  assert.equal(
+    await fs.readFile(path.join(rootDir, "src/app.js"), "utf8"),
+    "console.log('old');\n"
+  );
+});

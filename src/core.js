@@ -7,6 +7,7 @@ const { cwd } = require("node:process");
 
 const {
   AUTO_CONTEXT_MAX_FILES,
+  DEFAULT_PERMISSION_MODE,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   ESTIMATED_BYTES_PER_TOKEN,
   FILE_CONTEXT_LEVELS,
@@ -18,6 +19,7 @@ const {
   MAX_HISTORY_MESSAGES,
   MAX_REPO_MAP_FILES,
   MAX_TOTAL_FILE_BYTES,
+  PERMISSION_MODES,
   SUMMARY_MAX_BYTES,
 } = require("./config");
 
@@ -274,10 +276,34 @@ function refreshProjectSnapshot(state) {
   return state;
 }
 
+function normalizePermissionMode(mode) {
+  const candidate = String(mode || "").trim().toLowerCase();
+  return PERMISSION_MODES.includes(candidate) ? candidate : DEFAULT_PERMISSION_MODE;
+}
+
+function getPermissionMode(state) {
+  return normalizePermissionMode(state?.options?.permissionMode);
+}
+
+function canWriteWorkspace(state) {
+  return getPermissionMode(state) !== "read-only";
+}
+
+function canRunCommands(state) {
+  return getPermissionMode(state) !== "read-only";
+}
+
+function skipsPermissionPrompts(state) {
+  return getPermissionMode(state) === "danger-full-access";
+}
+
 function createState(options, workingDir = cwd()) {
   const detected = detectProjectRoot(workingDir);
   const state = {
-    options,
+    options: {
+      ...options,
+      permissionMode: normalizePermissionMode(options?.permissionMode),
+    },
     workingDir,
     rootDir: detected.rootDir,
     isGitRepo: detected.isGitRepo,
@@ -773,6 +799,7 @@ function isSafeProjectEditPath(relativePath) {
 function getContextSummary(state) {
   const lines = [
     `Proyecto: ${state.rootDir}`,
+    `Permisos: ${getPermissionMode(state)}`,
     `Archivos en contexto: ${state.selectedFiles.size}`,
   ];
 
@@ -785,6 +812,36 @@ function getContextSummary(state) {
   lines.push(`Resumen acumulado: ${state.summary ? "si" : "no"}`);
   if (state.lastCommandOutput) {
     lines.push("Salida de comando guardada: si");
+  }
+
+  return lines.join("\n");
+}
+
+function getStatusSummary(state, model = "") {
+  const stats = estimateContextStats(state);
+  const lines = [
+    `Proyecto: ${state.rootDir}`,
+    `Repositorio git: ${state.isGitRepo ? "si" : "no"}`,
+    `Modelo: ${model || "sin seleccionar"}`,
+    `Permisos: ${getPermissionMode(state)}`,
+    `Archivos indexados: ${state.projectFiles.length}`,
+    `Archivos en contexto: ${state.selectedFiles.size}`,
+    `Ventana restante: ~${stats.remainingTokens} tok (${stats.percentLeft}% libre)`,
+    `Historial activo: ${state.history.length} mensaje(s)`,
+    `Resumen acumulado: ${state.summary ? "si" : "no"}`,
+    `Salida de comando guardada: ${state.lastCommandOutput ? "si" : "no"}`,
+  ];
+
+  if (state.selectedFiles.size > 0) {
+    lines.push("Seleccion actual:");
+    for (const filePath of [...state.selectedFiles].sort()) {
+      lines.push(`- ${filePath}`);
+    }
+  }
+
+  if (state.gitStatus) {
+    lines.push("Cambios git:");
+    lines.push(state.gitStatus);
   }
 
   return lines.join("\n");
@@ -813,6 +870,14 @@ async function readFileContent(state, query) {
 }
 
 function runShellCommand(state, command) {
+  if (!canRunCommands(state)) {
+    return {
+      output: "El modo read-only no permite ejecutar comandos.",
+      status: null,
+      denied: true,
+    };
+  }
+
   const result = spawnSync(command, {
     cwd: state.workingDir,
     shell: true,
@@ -828,6 +893,37 @@ function runShellCommand(state, command) {
   return {
     output: merged || "[sin salida]",
     status: result.status,
+    denied: false,
+  };
+}
+
+function getGitDiff(state) {
+  if (!state.isGitRepo) {
+    return {
+      ok: false,
+      output: "El proyecto actual no es un repositorio git.",
+    };
+  }
+
+  const result = runCapture("git", ["diff", "--", "."], { cwd: state.rootDir });
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      output: result.stderr?.trim() || `git diff fallo con codigo ${result.status}.`,
+    };
+  }
+
+  const text = (result.stdout || "").trim();
+  if (!text) {
+    return {
+      ok: true,
+      output: "No hay diff pendiente.",
+    };
+  }
+
+  return {
+    ok: true,
+    output: truncateText(text, MAX_COMMAND_OUTPUT_BYTES).text,
   };
 }
 
@@ -887,6 +983,8 @@ module.exports = {
   buildContextBlock,
   commandExists,
   compactConversation,
+  canRunCommands,
+  canWriteWorkspace,
   createState,
   detectProjectRoot,
   displayPath,
@@ -896,13 +994,17 @@ module.exports = {
   formatBytes,
   getContextByteBudget,
   getContextSummary,
+  getGitDiff,
   getFileContextBudget,
   getImplicitEditSelection,
+  getPermissionMode,
+  getStatusSummary,
   isSafeProjectEditPath,
   listFiles,
   looksLikeEditRequest,
   makeConversationMessages,
   maybeCompactConversation,
+  normalizePermissionMode,
   normalizeSearchText,
   padInline,
   pickAutoContextFiles,
@@ -917,6 +1019,7 @@ module.exports = {
   runShellCommand,
   searchProjectContent,
   setFileContextBudget,
+  skipsPermissionPrompts,
   toPosixPath,
   truncateInline,
   truncateText,

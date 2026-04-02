@@ -6,6 +6,7 @@ const path = require("node:path");
 const { APPLY_MAX_PASSES, MAX_READ_REQUESTS } = require("./config");
 const {
   bumpFileContextBudget,
+  canWriteWorkspace,
   isSafeProjectEditPath,
   pickAutoContextFiles,
   refreshProjectSnapshot,
@@ -76,7 +77,7 @@ function buildApplyPrompt(state, instruction, options = {}) {
 }
 
 function parseApplyBlocks(text) {
-  const regex = /<<<FILE:(.+?)>>>\r?\n([\s\S]*?)\r?\n<<<END FILE>>>/g;
+  const regex = /(?:^|\n)\s*<<<FILE:(.+?)>+\r?\n([\s\S]*?)\r?\n\s*<<<END FILE>+\s*(?=\n|$)/g;
   const files = [];
   let match = regex.exec(text);
 
@@ -162,7 +163,7 @@ function extractApplyBlocks(state, text) {
 }
 
 function parseReadRequests(text) {
-  const regex = /<<<READ:(.+?)>>>/g;
+  const regex = /(?:^|\n)\s*<<<READ:(.+?)>+\s*(?=\n|$)/g;
   const requests = [];
   let match = regex.exec(text);
 
@@ -243,6 +244,14 @@ function addRequestedFilesToContext(state, requests) {
 }
 
 async function applyFileBlocks(state, blocks, ui, options = {}) {
+  if (!canWriteWorkspace(state)) {
+    ui.errorLine("El modo read-only no permite modificar archivos.");
+    return {
+      applied: false,
+      writtenFiles: [],
+    };
+  }
+
   const diffs = [];
   const pendingWrites = [];
 
@@ -324,6 +333,11 @@ async function previewPatch(state, model, instruction, deps) {
 
 async function applyChanges(state, model, instruction, deps, options = {}) {
   const { askModel, ui } = deps;
+
+  if (!canWriteWorkspace(state)) {
+    ui.errorLine("El modo read-only no permite modificar archivos.");
+    return false;
+  }
 
   if (state.selectedFiles.size === 0) {
     const autoFiles = pickAutoContextFiles(state, instruction);

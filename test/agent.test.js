@@ -52,6 +52,20 @@ test("parseAgentResponse accepts plain FINAL syntax", () => {
   assert.deepEqual(action, { type: "final", content: "tarea completada" });
 });
 
+test("parseAgentResponse accepts malformed tagged actions with short closing markers", () => {
+  const action = parseAgentResponse({}, "<<<LIST:src/>", (text) => text);
+  assert.deepEqual(action, { type: "list", filter: "src/" });
+});
+
+test("parseAgentResponse accepts malformed FINAL blocks with short closing markers", () => {
+  const action = parseAgentResponse(
+    {},
+    ["<<<FINAL>", "tarea completada", "<<<END FINAL>>"].join("\n"),
+    (text) => text
+  );
+  assert.deepEqual(action, { type: "final", content: "tarea completada" });
+});
+
 test("isDangerousCommand flags destructive commands", () => {
   assert.equal(isDangerousCommand("rm -rf dist"), true);
   assert.equal(isDangerousCommand("git reset --hard HEAD~1"), true);

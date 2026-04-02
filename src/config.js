@@ -1,6 +1,8 @@
 const { env } = require("node:process");
 
 const DEFAULT_BASE_URL = env.LMSTUDIO_BASE_URL || "http://127.0.0.1:1234";
+const PERMISSION_MODES = ["read-only", "workspace-write", "danger-full-access"];
+const DEFAULT_PERMISSION_MODE = env.LMCODE_PERMISSION_MODE || "workspace-write";
 const DEFAULT_SYSTEM_PROMPT =
   env.SYSTEM_PROMPT ||
   [
@@ -43,14 +45,18 @@ function printHelp(write) {
   lmcode --add <archivo> [--add <archivo>] [prompt]
   lmcode --model <id> [prompt]
   lmcode --models
+  lmcode --doctor
 
 Opciones:
-  --model, -m      Usa un modelo cargado especifico
-  --system, -s     Cambia el system prompt
-  --base-url       Cambia la URL base de LM Studio
-  --add, -a        Agrega archivos iniciales al contexto
-  --models         Lista modelos detectados
-  --help, -h       Muestra esta ayuda
+  --model, -m                    Usa un modelo cargado especifico
+  --system, -s                   Cambia el system prompt
+  --base-url                     Cambia la URL base de LM Studio
+  --add, -a                      Agrega archivos iniciales al contexto
+  --models                       Lista modelos detectados
+  --doctor                       Revisa el estado del entorno local
+  --permission-mode <modo>       read-only | workspace-write | danger-full-access
+  --dangerously-skip-permissions Equivale a danger-full-access
+  --help, -h                     Muestra esta ayuda
 
 Modo interactivo:
   /help            Ayuda corta
@@ -59,12 +65,17 @@ Modo interactivo:
   /model <id>      Cambia o carga un modelo por id
   /load            Alias de /model
   /load <id>       Carga un modelo por id
+  /status          Muestra estado de sesion, contexto y permisos
+  /permissions     Muestra el modo de permisos actual
+  /permissions <m> Cambia permisos: read-only | workspace-write | danger-full-access
+  /doctor          Revisa entorno local, LM Studio y herramientas disponibles
   /files [filtro]  Lista archivos del proyecto
   /add <ruta>      Agrega archivos al contexto
   /drop <ruta>     Quita archivos del contexto
   /context         Muestra el contexto actual
   /read <ruta>     Muestra un archivo
   /run <comando>   Ejecuta un comando y guarda la salida en el contexto
+  /diff            Muestra git diff actual
   /patch <inst>    Pide un diff unificado sobre los archivos agregados
   /apply <inst>    Propone cambios y los aplica con confirmacion
   /summary         Muestra el resumen acumulado de la sesion
@@ -82,6 +93,8 @@ function parseArgs(args, environment = env) {
     modelQuery: environment.LMSTUDIO_MODEL || environment.OPENAI_MODEL || "",
     addQueries: [],
     listModels: false,
+    doctor: false,
+    permissionMode: DEFAULT_PERMISSION_MODE,
     prompt: "",
   };
 
@@ -97,6 +110,11 @@ function parseArgs(args, environment = env) {
 
     if (arg === "--models") {
       options.listModels = true;
+      continue;
+    }
+
+    if (arg === "--doctor") {
+      options.doctor = true;
       continue;
     }
 
@@ -124,6 +142,17 @@ function parseArgs(args, environment = env) {
       continue;
     }
 
+    if (arg === "--permission-mode") {
+      options.permissionMode = args[index + 1] || DEFAULT_PERMISSION_MODE;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--dangerously-skip-permissions") {
+      options.permissionMode = "danger-full-access";
+      continue;
+    }
+
     promptParts.push(arg);
   }
 
@@ -136,6 +165,7 @@ module.exports = {
   AUTO_CONTEXT_MAX_FILES,
   DEFAULT_BASE_URL,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
+  DEFAULT_PERMISSION_MODE,
   DEFAULT_SYSTEM_PROMPT,
   ESTIMATED_BYTES_PER_TOKEN,
   FILE_CONTEXT_LEVELS,
@@ -149,6 +179,7 @@ module.exports = {
   MAX_READ_REQUESTS,
   MAX_REPO_MAP_FILES,
   MAX_TOTAL_FILE_BYTES,
+  PERMISSION_MODES,
   SPINNER_FRAMES,
   SUMMARY_MAX_BYTES,
   parseArgs,

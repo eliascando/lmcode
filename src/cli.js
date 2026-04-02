@@ -1,6 +1,6 @@
-const { argv, exit, stdin } = require("node:process");
+const { argv, exit, stdin, version } = require("node:process");
 
-const { parseArgs, printHelp } = require("./config");
+const { PERMISSION_MODES, parseArgs, printHelp } = require("./config");
 const core = require("./core");
 const lmstudio = require("./lmstudio");
 const ui = require("./ui");
@@ -79,6 +79,37 @@ async function printReadFile(state, query) {
   ui.writeLine(result.content);
 }
 
+async function printDoctor(state) {
+  const lines = [
+    "LM Code Doctor",
+    `Node.js: ${version}`,
+    `Proyecto: ${state.rootDir}`,
+    `Repositorio git: ${state.isGitRepo ? "si" : "no"}`,
+    `git: ${core.commandExists("git") ? "ok" : "faltante"}`,
+    `rg: ${core.commandExists("rg") ? "ok" : "faltante"}`,
+    `Permisos: ${core.getPermissionMode(state)}`,
+    `LM Studio base URL: ${state.options.baseUrl}`,
+  ];
+
+  try {
+    const models = await lmstudio.fetchModels(state.options.baseUrl);
+    const loaded = models.filter(
+      (model) => Array.isArray(model.loaded_instances) && model.loaded_instances.length > 0
+    );
+    lines.push("LM Studio: ok");
+    lines.push(`Modelos detectados: ${models.length}`);
+    lines.push(`Modelos cargados: ${loaded.length}`);
+    if (loaded[0]?.key) {
+      lines.push(`Primer modelo cargado: ${loaded[0].key}`);
+    }
+  } catch (error) {
+    lines.push("LM Studio: error");
+    lines.push(error instanceof Error ? error.message : String(error));
+  }
+
+  ui.writeLine(lines.join("\n"));
+}
+
 async function runOneShot(state, model, prompt) {
   const result = await runAgentLoop(state, model, prompt, ui);
   recordConversationTurn(state, prompt, result.finalText || result.rawAnswer);
@@ -105,7 +136,7 @@ async function runInteractive(state, model) {
 
       if (input === "/help") {
         ui.writeLine(
-          "/models  /model  /model <id>  /load  /load <id>  /files [filtro]  /add <ruta>  /drop <ruta>  /context  /read <ruta>  /run <cmd>  /patch <inst>  /apply <inst>  /summary  /compact  /clear  /reset  /exit"
+          "/models  /model  /model <id>  /load  /load <id>  /status  /permissions [modo]  /doctor  /files [filtro]  /add <ruta>  /drop <ruta>  /context  /read <ruta>  /run <cmd>  /diff  /patch <inst>  /apply <inst>  /summary  /compact  /clear  /reset  /exit"
         );
         continue;
       }
@@ -145,6 +176,33 @@ async function runInteractive(state, model) {
         );
         model = selected.key;
         applyModelSelection(state, selected, (key) => `Modelo activo: ${key}`);
+        continue;
+      }
+
+      if (input === "/status") {
+        ui.writeLine(core.getStatusSummary(state, model));
+        continue;
+      }
+
+      if (input === "/permissions") {
+        ui.writeLine(`Permisos actuales: ${core.getPermissionMode(state)}`);
+        continue;
+      }
+
+      if (input.startsWith("/permissions ")) {
+        const requested = input.slice(13).trim().toLowerCase();
+        if (!PERMISSION_MODES.includes(requested)) {
+          ui.errorLine(`Modo invalido. Usa: ${PERMISSION_MODES.join(" | ")}`);
+          continue;
+        }
+
+        state.options.permissionMode = requested;
+        ui.writeLine(`Permisos cambiados a ${requested}`);
+        continue;
+      }
+
+      if (input === "/doctor") {
+        await printDoctor(state);
         continue;
       }
 
@@ -226,6 +284,11 @@ async function runInteractive(state, model) {
         continue;
       }
 
+      if (input === "/diff") {
+        ui.writeLine(core.getGitDiff(state).output);
+        continue;
+      }
+
       if (input.startsWith("/patch ")) {
         await previewPatch(state, model, input.slice(7).trim(), { askModel, ui });
         continue;
@@ -253,6 +316,11 @@ async function main() {
   }
 
   const state = core.createState(options);
+
+  if (options.doctor) {
+    await printDoctor(state);
+    return;
+  }
 
   if (options.listModels) {
     lmstudio.printModels(ui, await lmstudio.fetchModels(options.baseUrl));

@@ -82,6 +82,30 @@ function parseTaggedValues(text, tag, allowEmpty = false) {
     match = regex.exec(text);
   }
 
+  if (values.length === 0) {
+    const prefix = `<<<${tag}`;
+    const lines = String(text || "").split(/\r?\n/);
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line.startsWith(prefix)) {
+        continue;
+      }
+
+      const closingMatch = line.match(/>+$/);
+      if (!closingMatch) {
+        continue;
+      }
+
+      const body = line.slice(prefix.length, line.length - closingMatch[0].length);
+      if (body && !body.startsWith(":")) {
+        continue;
+      }
+
+      values.push((body.startsWith(":") ? body.slice(1) : "").trim());
+    }
+  }
+
   return allowEmpty ? values : values.filter((value) => value.length > 0);
 }
 
@@ -144,7 +168,24 @@ function parsePlainFileBlocks(text) {
 
 function parseFinalBlock(text) {
   const match = text.match(/<<<FINAL>>>\r?\n?([\s\S]*?)\r?\n?<<<END FINAL>>>/);
-  return match ? match[1].trim() : "";
+  if (match) {
+    return match[1].trim();
+  }
+
+  const lines = String(text || "").split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => /^<<<FINAL>+\s*$/.test(line.trim()));
+  if (startIndex === -1) {
+    return "";
+  }
+
+  const endIndex = lines.findIndex(
+    (line, index) => index > startIndex && /^<<<END FINAL>+\s*$/.test(line.trim())
+  );
+  if (endIndex === -1) {
+    return "";
+  }
+
+  return lines.slice(startIndex + 1, endIndex).join("\n").trim();
 }
 
 function parseAgentResponse(state, text, sanitizeConsoleResponse) {
@@ -324,7 +365,11 @@ function executeGrep(state, query) {
 }
 
 async function executeRun(state, command, ui) {
-  if (isDangerousCommand(command)) {
+  if (!core.canRunCommands(state)) {
+    return formatToolResult("RUN_DENIED", "El modo read-only no permite ejecutar comandos.");
+  }
+
+  if (isDangerousCommand(command) && !core.skipsPermissionPrompts(state)) {
     const allowed = await confirmAction(ui, `Permitir comando potencialmente peligroso: ${command}`);
     if (!allowed) {
       return formatToolResult(
@@ -339,17 +384,23 @@ async function executeRun(state, command, ui) {
 }
 
 async function executeDelete(state, paths, ui) {
+  if (!core.canWriteWorkspace(state)) {
+    return formatToolResult("DELETE_DENIED", "El modo read-only no permite borrar archivos.");
+  }
+
   const safePaths = paths.filter((relativePath) => core.isSafeProjectEditPath(relativePath));
   if (!safePaths.length) {
     return formatToolResult("DELETE_ERROR", "No hay rutas seguras para borrar.");
   }
 
-  const allowed = await confirmAction(ui, `Permitir borrado de ${safePaths.join(", ")}`);
-  if (!allowed) {
-    return formatToolResult(
-      "DELETE_CANCELLED",
-      "El usuario no aprobo el borrado. Finaliza sin volver a pedir confirmacion."
-    );
+  if (!core.skipsPermissionPrompts(state)) {
+    const allowed = await confirmAction(ui, `Permitir borrado de ${safePaths.join(", ")}`);
+    if (!allowed) {
+      return formatToolResult(
+        "DELETE_CANCELLED",
+        "El usuario no aprobo el borrado. Finaliza sin volver a pedir confirmacion."
+      );
+    }
   }
 
   const deleted = [];
@@ -391,6 +442,10 @@ async function executeDelete(state, paths, ui) {
 }
 
 async function executeWrite(state, files, ui) {
+  if (!core.canWriteWorkspace(state)) {
+    return formatToolResult("WRITE_DENIED", "El modo read-only no permite modificar archivos.");
+  }
+
   const result = await applyFileBlocks(state, files, ui, { autoConfirm: true });
   return formatToolResult(
     result.applied ? "WRITE_OK" : "WRITE_NOOP",

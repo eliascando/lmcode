@@ -8,6 +8,7 @@ const {
   estimateContextStats,
   estimateTokens,
   formatBytes,
+  getPermissionMode,
   pluralize,
   truncateInline,
 } = require("./core");
@@ -94,6 +95,7 @@ function renderPromptHeader(state, model) {
     width
   );
   const secondaryParts = [`~${stats.remainingTokens} tok libres`];
+  secondaryParts.push(getPermissionMode(state));
 
   if (state.selectedFiles.size > 0) {
     secondaryParts.push(`${pluralize(state.selectedFiles.size, "archivo")} en contexto`);
@@ -203,7 +205,7 @@ async function runWithSpinner(model, label, task) {
 function printStartupBanner(state, model) {
   writeLine(paint("LM Code", THEME.title));
   writeLine(paint(`${model} · LM Studio local · ${displayPath(state.rootDir)}`, THEME.muted));
-  writeLine(paint("/help · /models · /context · /exit", THEME.dim));
+  writeLine(paint("/help · /models · /status · /context · /exit", THEME.dim));
   write("\n");
 }
 

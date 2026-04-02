@@ -5,8 +5,16 @@ const path = require("node:path");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 
-const { createState, getImplicitEditSelection, refreshProjectSnapshot, replaceSelectedFiles } =
-  require("../src/core");
+const {
+  createState,
+  getGitDiff,
+  getImplicitEditSelection,
+  getStatusSummary,
+  normalizePermissionMode,
+  refreshProjectSnapshot,
+  replaceSelectedFiles,
+  runShellCommand,
+} = require("../src/core");
 
 function createOptions() {
   return {
@@ -15,6 +23,7 @@ function createOptions() {
     modelQuery: "",
     addQueries: [],
     listModels: false,
+    permissionMode: "workspace-write",
     prompt: "",
   };
 }
@@ -74,4 +83,53 @@ test("refreshProjectSnapshot updates indexed files and git status", async () => 
 
   assert.equal(state.projectFiles.includes("src/new-file.js"), true);
   assert.match(state.gitStatus, /new-file\.js/);
+});
+
+test("normalizePermissionMode falls back to workspace-write", () => {
+  assert.equal(normalizePermissionMode("read-only"), "read-only");
+  assert.equal(normalizePermissionMode("workspace-write"), "workspace-write");
+  assert.equal(normalizePermissionMode("danger-full-access"), "danger-full-access");
+  assert.equal(normalizePermissionMode("cualquier-cosa"), "workspace-write");
+});
+
+test("runShellCommand denies execution in read-only mode", async () => {
+  const rootDir = await makeWorkspace({
+    "src/app.js": "console.log('a');\n",
+  });
+  const state = createState({ ...createOptions(), permissionMode: "read-only" }, rootDir);
+
+  const result = runShellCommand(state, "pwd");
+
+  assert.equal(result.denied, true);
+  assert.match(result.output, /read-only/);
+});
+
+test("getGitDiff returns current diff", async () => {
+  const rootDir = await makeWorkspace(
+    {
+      "src/app.js": "console.log('a');\n",
+    },
+    true
+  );
+  const state = createState(createOptions(), rootDir);
+  await fs.writeFile(path.join(rootDir, "src/app.js"), "console.log('b');\n", "utf8");
+
+  const result = getGitDiff(state);
+
+  assert.equal(result.ok, true);
+  assert.match(result.output, /console\.log\('b'\)/);
+});
+
+test("getStatusSummary includes permission mode and model", async () => {
+  const rootDir = await makeWorkspace({
+    "src/app.js": "console.log('a');\n",
+  });
+  const state = createState({ ...createOptions(), permissionMode: "read-only" }, rootDir);
+  replaceSelectedFiles(state, ["src/app.js"], "manual");
+
+  const summary = getStatusSummary(state, "qwen/test");
+
+  assert.match(summary, /Permisos: read-only/);
+  assert.match(summary, /Modelo: qwen\/test/);
+  assert.match(summary, /src\/app\.js/);
 });
