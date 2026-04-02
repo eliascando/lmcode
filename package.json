@@ -34,15 +34,19 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node ./bin/lmcode.js",
-    "check": "node --check ./bin/lmcode.js && node --check ./src/cli.js && node --check ./src/config.js && node --check ./src/core.js && node --check ./src/ui.js && node --check ./src/lmstudio.js && node --check ./src/apply.js && node --check ./src/agent.js",
+    "check": "node --check ./bin/lmcode.js && node --check ./src/cli.js && node --check ./src/config.js && node --check ./src/core.js && node --check ./src/ui.js && node --check ./src/lmstudio.js && node --check ./src/apply.js && node --check ./src/agent.js && node --check ./src/ui-react.mjs",
     "models": "node ./bin/lmcode.js --models",
     "test": "node --test",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run check && npm test",
     "install:local": "./scripts/install-local.sh"
+  },
+  "dependencies": {
+    "ink": "^6.8.0",
+    "react": "^19.2.4"
   }
 }

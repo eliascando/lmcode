@@ -24,3 +24,9 @@ test("parseArgs dangerously-skip-permissions enables danger-full-access", () => 
 
   assert.equal(options.permissionMode, "danger-full-access");
 });
+
+test("parseArgs reads ui mode flag", () => {
+  const options = parseArgs(["--ui", "react"]);
+
+  assert.equal(options.uiMode, "react");
+});

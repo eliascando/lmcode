@@ -3,6 +3,8 @@ const { env } = require("node:process");
 const DEFAULT_BASE_URL = env.LMSTUDIO_BASE_URL || "http://127.0.0.1:1234";
 const PERMISSION_MODES = ["read-only", "workspace-write", "danger-full-access"];
 const DEFAULT_PERMISSION_MODE = env.LMCODE_PERMISSION_MODE || "workspace-write";
+const UI_MODES = ["auto", "react", "classic"];
+const DEFAULT_UI_MODE = env.LMCODE_UI || "auto";
 const DEFAULT_SYSTEM_PROMPT =
   env.SYSTEM_PROMPT ||
   [
@@ -55,6 +57,7 @@ Opciones:
   --models                       Lista modelos detectados
   --doctor                       Revisa el estado del entorno local
   --permission-mode <modo>       read-only | workspace-write | danger-full-access
+  --ui <modo>                    auto | react | classic
   --dangerously-skip-permissions Equivale a danger-full-access
   --help, -h                     Muestra esta ayuda
 
@@ -95,6 +98,7 @@ function parseArgs(args, environment = env) {
     listModels: false,
     doctor: false,
     permissionMode: DEFAULT_PERMISSION_MODE,
+    uiMode: DEFAULT_UI_MODE,
     prompt: "",
   };
 
@@ -148,6 +152,12 @@ function parseArgs(args, environment = env) {
       continue;
     }
 
+    if (arg === "--ui") {
+      options.uiMode = args[index + 1] || DEFAULT_UI_MODE;
+      index += 1;
+      continue;
+    }
+
     if (arg === "--dangerously-skip-permissions") {
       options.permissionMode = "danger-full-access";
       continue;
@@ -167,6 +177,7 @@ module.exports = {
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   DEFAULT_PERMISSION_MODE,
   DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_UI_MODE,
   ESTIMATED_BYTES_PER_TOKEN,
   FILE_CONTEXT_LEVELS,
   HISTORY_COMPACT_TRIGGER_BYTES,
@@ -182,6 +193,7 @@ module.exports = {
   PERMISSION_MODES,
   SPINNER_FRAMES,
   SUMMARY_MAX_BYTES,
+  UI_MODES,
   parseArgs,
   printHelp,
 };

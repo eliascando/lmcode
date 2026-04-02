@@ -1,0 +1,32 @@
+changelog:
+  exclude:
+    labels:
+      - skip-release-notes
+  categories:
+    - title: 🚀 Features
+      labels:
+        - feat
+        - feature
+    - title: 🐛 Fixes
+      labels:
+        - fix
+        - bug
+        - bugfix
+    - title: 🧪 Tests & Quality
+      labels:
+        - test
+        - qa
+        - ci
+    - title: 📝 Docs
+      labels:
+        - docs
+        - documentation
+    - title: 🧰 Maintenance
+      labels:
+        - chore
+        - dependencies
+        - refactor
+        - maintenance
+    - title: Other Changes
+      labels:
+        - "*"

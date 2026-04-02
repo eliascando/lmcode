@@ -237,6 +237,21 @@ async function chooseModel(baseUrl, requestedModel, interactive, ui, forcePrompt
     });
 
     const selectedIndex = Math.max(0, sorted.findIndex((model) => model.key === currentModel));
+
+    if (typeof ui.chooseOption === "function") {
+      const picked = await ui.chooseOption({
+        title: "Elige un modelo",
+        hint: "Modelos cargados primero. Enter confirma; Esc mantiene el actual.",
+        selectedIndex,
+        options: sorted.map((model) => ({
+          label: model.key,
+          description: `[${modelStateLabel(model)}] ${model.display_name || ""}`.trim(),
+          model,
+        })),
+      });
+      return picked?.model || sorted[selectedIndex];
+    }
+
     const answer = (await ui.askPlainQuestion(`Modelo [${selectedIndex + 1}]: `)).trim();
     const pickedIndex = Number.parseInt(answer || String(selectedIndex + 1), 10) - 1;
     return sorted[pickedIndex] || sorted[selectedIndex];

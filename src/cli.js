@@ -1,15 +1,15 @@
 const { argv, exit, stdin, version } = require("node:process");
 
-const { PERMISSION_MODES, parseArgs, printHelp } = require("./config");
+const { PERMISSION_MODES, UI_MODES, parseArgs, printHelp } = require("./config");
 const core = require("./core");
 const lmstudio = require("./lmstudio");
 const ui = require("./ui");
 const { applyChanges, previewPatch } = require("./apply");
 const { runAgentLoop } = require("./agent");
 
-function printCompactionNotice(compacted) {
+function printCompactionNotice(compacted, uiAdapter = ui) {
   if (compacted) {
-    ui.writeLine(`[contexto resumido: ${compacted.reason}]`);
+    uiAdapter.writeLine(`[contexto resumido: ${compacted.reason}]`);
   }
 }
 
@@ -24,15 +24,17 @@ function buildMessages(state, prompt) {
   ];
 }
 
-async function askModel(state, model, prompt, options = {}) {
-  if (!options.skipCompact) {
-    const compacted = core.maybeCompactConversation(state, prompt);
-    printCompactionNotice(compacted);
-  }
+function createAskModel(uiAdapter = ui) {
+  return async function askModel(state, model, prompt, options = {}) {
+    if (!options.skipCompact) {
+      const compacted = core.maybeCompactConversation(state, prompt);
+      printCompactionNotice(compacted, uiAdapter);
+    }
 
-  state.contextBlock = await core.buildContextBlock(state);
-  const messages = buildMessages(state, prompt);
-  return lmstudio.chatCompletion(state.options.baseUrl, model, messages);
+    state.contextBlock = await core.buildContextBlock(state);
+    const messages = buildMessages(state, prompt);
+    return lmstudio.chatCompletion(state.options.baseUrl, model, messages);
+  };
 }
 
 function recordConversationTurn(state, prompt, answer) {
@@ -44,42 +46,45 @@ function recordConversationTurn(state, prompt, answer) {
   state.history.push({ role: "assistant", content: answer });
 }
 
-function applyModelSelection(state, selected, successMessage) {
+function applyModelSelection(state, selected, successMessage, uiAdapter = ui) {
   state.contextWindowTokens = selected.contextLength || state.contextWindowTokens;
   state.history = [];
   state.summary = "";
   state.expandedFiles.clear();
   state.fileContextBudgets.clear();
-  ui.writeLine(successMessage(selected.key));
+  if (typeof uiAdapter.setModel === "function") {
+    uiAdapter.setModel(selected.key);
+  }
+  uiAdapter.writeLine(successMessage(selected.key));
 }
 
-function printFiles(state, filter = "") {
+function printFiles(state, filter = "", uiAdapter = ui) {
   const result = core.listFiles(state, filter);
   if (!result.files.length) {
-    ui.writeLine("No se encontraron archivos.");
+    uiAdapter.writeLine("No se encontraron archivos.");
     return;
   }
 
-  result.preview.forEach((filePath) => ui.writeLine(filePath));
+  result.preview.forEach((filePath) => uiAdapter.writeLine(filePath));
   if (result.hiddenCount > 0) {
-    ui.writeLine(`[+${result.hiddenCount} archivos mas]`);
+    uiAdapter.writeLine(`[+${result.hiddenCount} archivos mas]`);
   }
 }
 
-async function printReadFile(state, query) {
+async function printReadFile(state, query, uiAdapter = ui) {
   const result = await core.readFileContent(state, query);
   if (result.error) {
-    ui.errorLine(result.error);
+    uiAdapter.errorLine(result.error);
     if (result.matches) {
-      result.matches.forEach((filePath) => ui.errorLine(filePath));
+      result.matches.forEach((filePath) => uiAdapter.errorLine(filePath));
     }
     return;
   }
 
-  ui.writeLine(result.content);
+  uiAdapter.writeLine(result.content);
 }
 
-async function printDoctor(state) {
+async function printDoctor(state, uiAdapter = ui) {
   const lines = [
     "LM Code Doctor",
     `Node.js: ${version}`,
@@ -107,19 +112,20 @@ async function printDoctor(state) {
     lines.push(error instanceof Error ? error.message : String(error));
   }
 
-  ui.writeLine(lines.join("\n"));
+  uiAdapter.writeLine(lines.join("\n"));
 }
 
-async function runOneShot(state, model, prompt) {
-  const result = await runAgentLoop(state, model, prompt, ui);
+async function runOneShot(state, model, prompt, uiAdapter = ui) {
+  const result = await runAgentLoop(state, model, prompt, uiAdapter);
   recordConversationTurn(state, prompt, result.finalText || result.rawAnswer);
 }
 
-async function runInteractive(state, model) {
-  ui.printStartupBanner(state, model);
+async function runInteractive(state, model, uiAdapter = ui) {
+  const askModel = createAskModel(uiAdapter);
+  uiAdapter.printStartupBanner(state, model);
 
   while (true) {
-    const input = await ui.readFancyInput(state, model);
+    const input = await uiAdapter.readFancyInput(state, model);
 
     if (input === null) {
       return;
@@ -135,14 +141,14 @@ async function runInteractive(state, model) {
       }
 
       if (input === "/help") {
-        ui.writeLine(
+        uiAdapter.writeLine(
           "/models  /model  /model <id>  /load  /load <id>  /status  /permissions [modo]  /doctor  /files [filtro]  /add <ruta>  /drop <ruta>  /context  /read <ruta>  /run <cmd>  /diff  /patch <inst>  /apply <inst>  /summary  /compact  /clear  /reset  /exit"
         );
         continue;
       }
 
       if (input === "/models") {
-        lmstudio.printModels(ui, await lmstudio.fetchModels(state.options.baseUrl));
+        lmstudio.printModels(uiAdapter, await lmstudio.fetchModels(state.options.baseUrl));
         continue;
       }
 
@@ -152,17 +158,24 @@ async function runInteractive(state, model) {
           model,
           input.slice(7).trim(),
           false,
-          ui
+          uiAdapter
         );
         model = selected.key;
-        applyModelSelection(state, selected, (key) => `Modelo cambiado a ${key}`);
+        applyModelSelection(state, selected, (key) => `Modelo cambiado a ${key}`, uiAdapter);
         continue;
       }
 
       if (input === "/model" || input === "/load") {
-        const selected = await lmstudio.switchModel(state.options.baseUrl, model, "", true, ui, true);
+        const selected = await lmstudio.switchModel(
+          state.options.baseUrl,
+          model,
+          "",
+          true,
+          uiAdapter,
+          true
+        );
         model = selected.key;
-        applyModelSelection(state, selected, (key) => `Modelo activo: ${key}`);
+        applyModelSelection(state, selected, (key) => `Modelo activo: ${key}`, uiAdapter);
         continue;
       }
 
@@ -172,37 +185,37 @@ async function runInteractive(state, model) {
           model,
           input.slice(6).trim(),
           false,
-          ui
+          uiAdapter
         );
         model = selected.key;
-        applyModelSelection(state, selected, (key) => `Modelo activo: ${key}`);
+        applyModelSelection(state, selected, (key) => `Modelo activo: ${key}`, uiAdapter);
         continue;
       }
 
       if (input === "/status") {
-        ui.writeLine(core.getStatusSummary(state, model));
+        uiAdapter.writeLine(core.getStatusSummary(state, model));
         continue;
       }
 
       if (input === "/permissions") {
-        ui.writeLine(`Permisos actuales: ${core.getPermissionMode(state)}`);
+        uiAdapter.writeLine(`Permisos actuales: ${core.getPermissionMode(state)}`);
         continue;
       }
 
       if (input.startsWith("/permissions ")) {
         const requested = input.slice(13).trim().toLowerCase();
         if (!PERMISSION_MODES.includes(requested)) {
-          ui.errorLine(`Modo invalido. Usa: ${PERMISSION_MODES.join(" | ")}`);
+          uiAdapter.errorLine(`Modo invalido. Usa: ${PERMISSION_MODES.join(" | ")}`);
           continue;
         }
 
         state.options.permissionMode = requested;
-        ui.writeLine(`Permisos cambiados a ${requested}`);
+        uiAdapter.writeLine(`Permisos cambiados a ${requested}`);
         continue;
       }
 
       if (input === "/doctor") {
-        await printDoctor(state);
+        await printDoctor(state, uiAdapter);
         continue;
       }
 
@@ -210,7 +223,7 @@ async function runInteractive(state, model) {
         state.history = [];
         state.summary = "";
         state.expandedFiles.clear();
-        ui.writeLine("Conversacion limpiada.");
+        uiAdapter.writeLine("Conversacion limpiada.");
         continue;
       }
 
@@ -222,15 +235,15 @@ async function runInteractive(state, model) {
         state.expandedFiles.clear();
         state.fileContextBudgets.clear();
         state.lastCommandOutput = "";
-        ui.writeLine("Contexto reiniciado.");
+        uiAdapter.writeLine("Contexto reiniciado.");
         continue;
       }
 
       if (input === "/summary") {
         if (!state.summary) {
-          ui.writeLine("No hay resumen acumulado todavia.");
+          uiAdapter.writeLine("No hay resumen acumulado todavia.");
         } else {
-          ui.writeLine(state.summary);
+          uiAdapter.writeLine(state.summary);
         }
         continue;
       }
@@ -238,73 +251,109 @@ async function runInteractive(state, model) {
       if (input === "/compact") {
         const compacted = core.compactConversation(state, "manual");
         if (!compacted) {
-          ui.writeLine("No habia historial para resumir.");
+          uiAdapter.writeLine("No habia historial para resumir.");
         } else {
-          printCompactionNotice(compacted);
+          printCompactionNotice(compacted, uiAdapter);
         }
         continue;
       }
 
       if (input.startsWith("/files")) {
-        printFiles(state, input.slice(6));
+        printFiles(state, input.slice(6), uiAdapter);
         continue;
       }
 
       if (input.startsWith("/add ")) {
         const { added, warnings } = core.addFiles(state, [input.slice(5).trim()], "manual");
-        warnings.forEach((warning) => ui.errorLine(warning));
+        warnings.forEach((warning) => uiAdapter.errorLine(warning));
         if (added.length) {
-          ui.writeLine(`Agregados:\n${added.join("\n")}`);
+          uiAdapter.writeLine(`Agregados:\n${added.join("\n")}`);
         }
         continue;
       }
 
       if (input.startsWith("/drop ")) {
         const { removed, warnings } = core.dropFiles(state, [input.slice(6).trim()]);
-        warnings.forEach((warning) => ui.errorLine(warning));
+        warnings.forEach((warning) => uiAdapter.errorLine(warning));
         if (removed.length) {
-          ui.writeLine(`Quitados:\n${removed.join("\n")}`);
+          uiAdapter.writeLine(`Quitados:\n${removed.join("\n")}`);
         }
         continue;
       }
 
       if (input === "/context") {
-        ui.writeLine(core.getContextSummary(state));
+        uiAdapter.writeLine(core.getContextSummary(state));
         continue;
       }
 
       if (input.startsWith("/read ")) {
-        await printReadFile(state, input.slice(6).trim());
+        await printReadFile(state, input.slice(6).trim(), uiAdapter);
         continue;
       }
 
       if (input.startsWith("/run ")) {
         const result = core.runShellCommand(state, input.slice(5).trim());
-        ui.writeLine(result.output);
+        uiAdapter.writeLine(result.output);
         continue;
       }
 
       if (input === "/diff") {
-        ui.writeLine(core.getGitDiff(state).output);
+        uiAdapter.writeLine(core.getGitDiff(state).output);
         continue;
       }
 
       if (input.startsWith("/patch ")) {
-        await previewPatch(state, model, input.slice(7).trim(), { askModel, ui });
+        await previewPatch(state, model, input.slice(7).trim(), { askModel, ui: uiAdapter });
         continue;
       }
 
       if (input.startsWith("/apply ")) {
-        await applyChanges(state, model, input.slice(7).trim(), { askModel, ui });
+        await applyChanges(state, model, input.slice(7).trim(), {
+          askModel,
+          ui: uiAdapter,
+        });
         continue;
       }
 
-      const result = await runAgentLoop(state, model, input, ui);
+      const result = await runAgentLoop(state, model, input, uiAdapter);
       recordConversationTurn(state, input, result.finalText || result.rawAnswer);
     } catch (error) {
-      ui.errorLine(error instanceof Error ? error.message : String(error));
+      uiAdapter.errorLine(error instanceof Error ? error.message : String(error));
     }
   }
+}
+
+function resolveUiMode(options) {
+  const candidate = String(options.uiMode || "auto").trim().toLowerCase();
+  return UI_MODES.includes(candidate) ? candidate : "auto";
+}
+
+async function runPreferredInteractiveUi(state, model) {
+  const uiMode = resolveUiMode(state.options);
+  if (!stdin.isTTY || uiMode === "classic") {
+    await runInteractive(state, model, ui);
+    return;
+  }
+
+  if (uiMode === "react" || uiMode === "auto") {
+    try {
+      const { runReactInteractive } = await import("./ui-react.mjs");
+      await runReactInteractive(state, model, { runInteractive });
+      return;
+    } catch (error) {
+      if (uiMode === "react") {
+        throw error;
+      }
+
+      ui.errorLine(
+        `No pude iniciar la UI React. Vuelvo a la interfaz clasica. ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  await runInteractive(state, model, ui);
 }
 
 async function main() {
@@ -318,7 +367,7 @@ async function main() {
   const state = core.createState(options);
 
   if (options.doctor) {
-    await printDoctor(state);
+    await printDoctor(state, ui);
     return;
   }
 
@@ -343,15 +392,16 @@ async function main() {
   const prompt = await core.readStdinIfNeeded(options.prompt);
 
   if (prompt) {
-    await runOneShot(state, model, prompt);
+    await runOneShot(state, model, prompt, ui);
     return;
   }
 
-  await runInteractive(state, model);
+  await runPreferredInteractiveUi(state, model);
 }
 
 module.exports = {
   main,
+  runInteractive,
 };
 
 if (require.main === module) {

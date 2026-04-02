@@ -1,11 +1,16 @@
 # lmcode
 
+[![CI](https://github.com/eliascando/lmcode/actions/workflows/ci.yml/badge.svg)](https://github.com/eliascando/lmcode/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40ecando%2Flmcode)](https://www.npmjs.com/package/@ecando/lmcode)
+[![Node >=20](https://img.shields.io/badge/node-%3E%3D20-339933)](https://nodejs.org/)
+
 CLI de agente de programacion local para LM Studio.
 
 `lmcode` trabaja sobre el proyecto actual y puede leer archivos, buscar texto, ejecutar comandos seguros, modificar codigo y pedir confirmacion solo para acciones peligrosas como borrado o comandos destructivos.
 
 Tambien incluye:
 
+- interfaz interactiva avanzada para una UX mas rica
 - modo de permisos configurable: `read-only`, `workspace-write`, `danger-full-access`
 - `/status` para inspeccionar la sesion actual
 - `/diff` para ver cambios git pendientes
@@ -13,7 +18,7 @@ Tambien incluye:
 
 ## Requisitos
 
-- Node.js 18 o superior
+- Node.js 20 o superior
 - LM Studio instalado
 - El servidor local de LM Studio levantado
 - Al menos un modelo cargado en LM Studio
@@ -57,6 +62,12 @@ lmcode --models
 lmcode
 ```
 
+Por defecto, en TTY usa la interfaz avanzada. Si quieres volver a la interfaz clasica:
+
+```bash
+lmcode --ui classic
+```
+
 ### Prompt unico
 
 ```bash
@@ -82,6 +93,14 @@ lmcode --doctor
 lmcode --permission-mode read-only
 lmcode --permission-mode workspace-write
 lmcode --dangerously-skip-permissions
+```
+
+### Elegir interfaz
+
+```bash
+lmcode --ui auto
+lmcode --ui react
+lmcode --ui classic
 ```
 
 ### Cambiar URL o system prompt por comando
@@ -145,6 +164,12 @@ Tambien se aceptan `LMSTUDIO_CONTEXT_TOKENS` y `CONTEXT_WINDOW`.
 export LMCODE_PERMISSION_MODE="workspace-write"
 ```
 
+### Interfaz por defecto
+
+```bash
+export LMCODE_UI="auto"
+```
+
 ### Desactivar color
 
 ```bash
@@ -192,6 +217,22 @@ En el flujo normal, `lmcode` entra a un loop de agente. El modelo puede:
 
 Los cambios de codigo se aplican mostrando diff. Los comandos peligrosos y el borrado requieren aprobacion.
 
+## Interfaz avanzada
+
+La UI interactiva moderna renderiza:
+
+- header liviano con modelo, proyecto, permisos y presupuesto de contexto
+- flujo principal mas limpio, con menos cajas persistentes
+- panel de actividad en tiempo real
+- panel lateral reducido para sesion, acciones y contexto
+- paleta de comandos con `Ctrl+P`
+- selector visual de archivos/contexto con `Ctrl+O`
+- autocompletado de comandos slash con `Tab`
+- historial de prompts con `↑` y `↓`
+- prompt inferior persistente con ayudas cortas de uso
+
+Si la interfaz avanzada falla al iniciar y estas en `--ui auto`, `lmcode` vuelve automaticamente a la interfaz clasica.
+
 ### Modos de permisos
 
 - `read-only`: permite inspeccion, pero bloquea `/run`, escrituras y borrados
@@ -212,12 +253,14 @@ El repo incluye un workflow en `.github/workflows/publish-npm.yml` que publica d
 
 El flujo hace esto:
 
+- corre CI de validacion en pushes y pull requests con `.github/workflows/ci.yml`
 - corre `npm run check`
 - corre `npm test`
 - corre `npm run pack:check`
 - valida que el tag Git coincida con la version de `package.json`
 - revisa si la version actual de `package.json` ya existe en npm
 - publica solo si esa version todavia no fue publicada
+- crea el release de GitHub para ese tag con notas autogeneradas
 
 Para sacar una nueva version:
 
@@ -239,6 +282,8 @@ Configuracion inicial obligatoria en npm:
 3. Usa exactamente tu usuario u organizacion, el nombre del repo, el workflow `publish-npm.yml` y el environment `npm`.
 
 Con eso ya no hace falta guardar un `NPM_TOKEN` de escritura en GitHub. Si la version ya existe, el workflow termina sin publicar.
+
+Las notas del release se generan automaticamente con GitHub Release Notes y se pueden ajustar desde `.github/release.yml`.
 
 Si quieres revisar exactamente lo que saldra al registro antes de subir:
 
