@@ -2,6 +2,14 @@
   "name": "@ecando/lmcode",
   "version": "0.1.1",
   "description": "Autonomous local coding agent CLI for LM Studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eliascando/lmcode"
+  },
+  "homepage": "https://github.com/eliascando/lmcode#readme",
+  "bugs": {
+    "url": "https://github.com/eliascando/lmcode/issues"
+  },
   "bin": {
     "lmcode": "bin/lmcode.js"
   },
