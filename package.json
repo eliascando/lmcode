@@ -1,6 +1,6 @@
 {
   "name": "@ecando/lmcode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Autonomous local coding agent CLI for LM Studio",
   "bin": {
     "lmcode": "bin/lmcode.js"
