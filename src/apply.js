@@ -77,7 +77,7 @@ function buildApplyPrompt(state, instruction, options = {}) {
 }
 
 function parseApplyBlocks(text) {
-  const regex = /(?:^|\n)\s*<<<FILE:(.+?)>+\r?\n([\s\S]*?)\r?\n\s*<<<END FILE>+\s*(?=\n|$)/g;
+  const regex = /(?:^|\n)\s*<<<FILE:(.+?)>+\r?\n([\s\S]*?)(?:\r?\n\s*)?<<<END FILE>+\s*(?=\n|$)/g;
   const files = [];
   let match = regex.exec(text);
 

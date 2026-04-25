@@ -104,6 +104,32 @@ test("runShellCommand denies execution in read-only mode", async () => {
   assert.match(result.output, /read-only/);
 });
 
+test("runShellCommand rejects empty commands", async () => {
+  const rootDir = await makeWorkspace({
+    "src/app.js": "console.log('a');\n",
+  });
+  const state = createState(createOptions(), rootDir);
+
+  const result = runShellCommand(state, "   ");
+
+  assert.equal(result.denied, true);
+  assert.match(result.output, /no puede estar vacio/);
+});
+
+test("runShellCommand returns truncated output for large command output", async () => {
+  const rootDir = await makeWorkspace({
+    "src/app.js": "console.log('a');\n",
+  });
+  const state = createState(createOptions(), rootDir);
+
+  const result = runShellCommand(state, "node -e \"process.stdout.write('x'.repeat(9000))\"");
+
+  assert.equal(result.denied, false);
+  assert.match(result.output, /\[truncado\]/);
+  assert.equal(result.output.length < 9000, true);
+  assert.match(state.lastCommandOutput, /\[truncado\]/);
+});
+
 test("getGitDiff returns current diff", async () => {
   const rootDir = await makeWorkspace(
     {

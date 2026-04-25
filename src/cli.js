@@ -5,7 +5,7 @@ const core = require("./core");
 const lmstudio = require("./lmstudio");
 const ui = require("./ui");
 const { applyChanges, previewPatch } = require("./apply");
-const { runAgentLoop } = require("./agent");
+const { isDangerousCommand, runAgentLoop } = require("./agent");
 
 function printCompactionNotice(compacted, uiAdapter = ui) {
   if (compacted) {
@@ -113,6 +113,17 @@ async function printDoctor(state, uiAdapter = ui) {
   }
 
   uiAdapter.writeLine(lines.join("\n"));
+}
+
+async function confirmDangerousRun(state, command, uiAdapter = ui) {
+  if (!isDangerousCommand(command) || core.skipsPermissionPrompts(state)) {
+    return true;
+  }
+
+  const answer = (await uiAdapter.askPlainQuestion(`Permitir comando potencialmente peligroso: ${command} [y/N]: `))
+    .trim()
+    .toLowerCase();
+  return answer === "y" || answer === "yes" || answer === "si" || answer === "s";
 }
 
 async function runOneShot(state, model, prompt, uiAdapter = ui) {
@@ -292,7 +303,13 @@ async function runInteractive(state, model, uiAdapter = ui) {
       }
 
       if (input.startsWith("/run ")) {
-        const result = core.runShellCommand(state, input.slice(5).trim());
+        const command = input.slice(5).trim();
+        if (!(await confirmDangerousRun(state, command, uiAdapter))) {
+          uiAdapter.writeLine("Comando cancelado.");
+          continue;
+        }
+
+        const result = core.runShellCommand(state, command);
         uiAdapter.writeLine(result.output);
         continue;
       }
@@ -400,6 +417,7 @@ async function main() {
 }
 
 module.exports = {
+  confirmDangerousRun,
   main,
   runInteractive,
 };

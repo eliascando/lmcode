@@ -878,7 +878,16 @@ function runShellCommand(state, command) {
     };
   }
 
-  const result = spawnSync(command, {
+  const normalizedCommand = String(command || "").trim();
+  if (!normalizedCommand) {
+    return {
+      output: "El comando no puede estar vacio.",
+      status: null,
+      denied: true,
+    };
+  }
+
+  const result = spawnSync(normalizedCommand, {
     cwd: state.workingDir,
     shell: true,
     encoding: "utf8",
@@ -887,11 +896,11 @@ function runShellCommand(state, command) {
 
   const merged = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n").trim();
   const truncated = truncateText(merged || "[sin salida]", MAX_COMMAND_OUTPUT_BYTES);
-  state.lastCommandOutput = `Comando: ${command}\n${truncated.text}`;
+  state.lastCommandOutput = `Comando: ${normalizedCommand}\n${truncated.text}`;
   refreshProjectSnapshot(state);
 
   return {
-    output: merged || "[sin salida]",
+    output: truncated.text,
     status: result.status,
     denied: false,
   };

@@ -5,7 +5,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 
-const { applyChanges } = require("../src/apply");
+const { applyChanges, parseApplyBlocks } = require("../src/apply");
 const { createState, replaceSelectedFiles } = require("../src/core");
 
 function createOptions() {
@@ -139,6 +139,16 @@ test("applyChanges accepts malformed READ and FILE tags with short closing marke
     await fs.readFile(path.join(rootDir, "src/extra.js"), "utf8"),
     "export const extra = false;"
   );
+});
+
+test("parseApplyBlocks accepts file blocks without a newline before the closing tag", () => {
+  const blocks = parseApplyBlocks(
+    ["<<<FILE:src/app.js>>>", "console.log('new');<<<END FILE>>>", ""].join("\n")
+  );
+
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].relativePath, "src/app.js");
+  assert.equal(blocks[0].content, "console.log('new');");
 });
 
 test("applyChanges denies file modifications in read-only mode", async () => {

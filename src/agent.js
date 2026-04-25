@@ -151,7 +151,7 @@ function parsePlainActionLines(text, keywords, options = {}) {
 
 function parsePlainFileBlocks(text) {
   const regex =
-    /(?:^|\n)\s*(?:FILE|ARCHIVO)\s*:\s*(.+?)\r?\n([\s\S]*?)(?:\r?\n\s*(?:END FILE|FIN ARCHIVO)\s*(?=\n|$))/gi;
+    /(?:^|\n)\s*(?:FILE|ARCHIVO)\s*:\s*(.+?)\r?\n([\s\S]*?)(?:\r?\n\s*)?(?:END FILE|FIN ARCHIVO)\s*(?=\n|$)/gi;
   const files = [];
   let match = regex.exec(text);
 
@@ -282,16 +282,24 @@ function parseAgentResponse(state, text, sanitizeConsoleResponse) {
 }
 
 function isDangerousCommand(command) {
-  const normalized = String(command || "").toLowerCase();
+  const normalized = String(command || "").trim().toLowerCase();
   return [
     /\brm\b/,
     /\brmdir\b/,
     /\bdel\b/,
     /\bmv\b/,
+    /\bsudo\b/,
+    /\bdoas\b/,
+    /\bpkexec\b/,
+    /\bsu\b/,
+    /\bchmod\b/,
+    /\bchown\b/,
     /\bgit\s+reset\b/,
     /\bgit\s+checkout\s+--\b/,
     /\bgit\s+clean\b/,
     /\bfind\b[\s\S]*\b-delete\b/,
+    /\b(?:sh|bash|zsh|fish)\s+-c\b/,
+    /\b(?:curl|wget)\b[\s\S]*\|\s*(?:sh|bash|zsh|fish)\b/,
     /\bshutdown\b/,
     /\breboot\b/,
     /\bdd\b/,
@@ -365,12 +373,21 @@ function executeGrep(state, query) {
 }
 
 async function executeRun(state, command, ui) {
+  const normalizedCommand = String(command || "").trim();
+
+  if (!normalizedCommand) {
+    return formatToolResult("RUN_ERROR", "El comando no puede estar vacio.");
+  }
+
   if (!core.canRunCommands(state)) {
     return formatToolResult("RUN_DENIED", "El modo read-only no permite ejecutar comandos.");
   }
 
-  if (isDangerousCommand(command) && !core.skipsPermissionPrompts(state)) {
-    const allowed = await confirmAction(ui, `Permitir comando potencialmente peligroso: ${command}`);
+  if (isDangerousCommand(normalizedCommand) && !core.skipsPermissionPrompts(state)) {
+    const allowed = await confirmAction(
+      ui,
+      `Permitir comando potencialmente peligroso: ${normalizedCommand}`
+    );
     if (!allowed) {
       return formatToolResult(
         "RUN_CANCELLED",
@@ -379,7 +396,7 @@ async function executeRun(state, command, ui) {
     }
   }
 
-  const result = core.runShellCommand(state, command);
+  const result = core.runShellCommand(state, normalizedCommand);
   return formatToolResult(`RUN_OK status=${result.status ?? "?"}`, result.output);
 }
 
